@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOL/USDC :: PRICE TERMINAL</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green:       #00ff41;
+  --green-dim:   #00882b;
+  --green-mid:   #00cc33;
+  --green-bright:#88ffaa;
+  --red:         #ff3333;
+  --yellow:      #ffcc00;
+  --cyan:        #00ffee;
+  --bg:          #010801;
+  --bg-card:     #020d02;
+  --border:      rgba(0,255,65,0.18);
+  --glow-sm:     0 0 8px rgba(0,255,65,0.6);
+  --glow-md:     0 0 12px rgba(0,255,65,0.7), 0 0 24px rgba(0,255,65,0.3);
+  --glow-lg:     0 0 16px rgba(0,255,65,0.9), 0 0 32px rgba(0,255,65,0.5);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{height:100%;}
+body{background:var(--bg);color:var(--green);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden;position:relative;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);pointer-events:none;z-index:9999;}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.75) 100%);pointer-events:none;z-index:9998;}
+canvas#rain{position:fixed;top:0;left:0;opacity:.04;pointer-events:none;z-index:0;}
+
+.wrap{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:16px 20px 40px;}
+
+/* HEADER */
+.hdr{text-align:center;padding:18px 0 14px;border-bottom:1px solid var(--border);margin-bottom:16px;}
+.ascii{font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.25;white-space:pre;color:var(--green);text-shadow:var(--glow-md);display:inline-block;transition:transform .08s,opacity .08s;}
+.hdr-sub{margin-top:10px;font-size:11px;letter-spacing:6px;color:var(--green-dim);text-transform:uppercase;}
+.hdr-sub span{color:var(--cyan);text-shadow:0 0 8px var(--cyan);}
+
+/* SYS BAR */
+.sys-bar{display:flex;flex-wrap:wrap;gap:14px;padding:8px 14px;border:1px solid var(--border);background:var(--bg-card);margin-bottom:14px;font-size:11px;align-items:center;}
+.sys-item{display:flex;gap:8px;align-items:center;}
+.sys-label{color:var(--green-dim);}
+.sys-val{color:var(--green);text-shadow:var(--glow-sm);}
+.sys-val.big{font-family:'VT323',monospace;font-size:22px;color:var(--green-bright);text-shadow:var(--glow-md);}
+.sys-sep{color:var(--border);}
+
+/* MAIN LAYOUT */
+.main-cols{display:grid;grid-template-columns:1fr 390px;gap:14px;margin-bottom:14px;}
+@media(max-width:1100px){.main-cols{grid-template-columns:1fr;}}
+
+/* EXCHANGE GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:10px;align-content:start;}
+.card{border:1px solid var(--border);background:var(--bg-card);padding:11px 13px 10px;position:relative;overflow:hidden;transition:border-color .4s;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:0;transition:opacity .4s;}
+.card.st-connected{border-color:rgba(0,255,65,.4);}
+.card.st-connected::before{opacity:1;}
+.card.st-disconnected{border-color:rgba(255,51,51,.25);}
+.card.st-connecting{border-color:rgba(255,204,0,.3);}
+.card.st-error{border-color:rgba(255,51,51,.2);}
+.card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.exch-name{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--green-mid);}
+.dot{width:7px;height:7px;border-radius:50%;background:#1a1a1a;flex-shrink:0;}
+.dot.st-connected{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2.5s ease-in-out infinite;}
+.dot.st-disconnected{background:var(--red);box-shadow:0 0 6px var(--red);}
+.dot.st-connecting{background:var(--yellow);animation:blink .5s step-end infinite;}
+.dot.st-error{background:#ff6600;}
+.price-big{font-family:'VT323',monospace;font-size:32px;line-height:1;color:var(--green-bright);text-shadow:var(--glow-md);min-height:34px;transition:color .15s;}
+.price-big.flash-up{animation:bg-up .35s ease-out;}
+.price-big.flash-down{animation:bg-down .35s ease-out;color:#ff7777!important;text-shadow:0 0 12px #ff555588;}
+@keyframes bg-up{from{background:rgba(0,255,65,.12)}to{background:transparent}}
+@keyframes bg-down{from{background:rgba(255,51,51,.12)}to{background:transparent}}
+.price-arrow{font-size:13px;margin-left:5px;}
+.price-arrow.up{color:#44ff88;}
+.price-arrow.down{color:#ff5555;}
+.card-ba{display:flex;gap:10px;margin-top:5px;font-size:10px;}
+.card-ba .bid{color:#44ff88;}
+.card-ba .ask{color:#ff5555;}
+.card-ba .lbl{color:var(--green-dim);}
+.card-ba .spr{color:var(--yellow);font-size:9px;margin-left:auto;}
+.imb-wrap{margin-top:5px;height:5px;background:rgba(255,51,51,.2);border:1px solid rgba(255,51,51,.15);}
+.imb-fill{height:100%;background:var(--green);transition:width .4s ease;}
+.imb-label{display:flex;justify-content:space-between;font-size:9px;color:var(--green-dim);margin-top:2px;}
+.imb-pct{font-size:10px;color:var(--green-dim);}
+.imb-pct.bull{color:#44ff88;}
+.imb-pct.bear{color:#ff5555;}
+.no-ob{font-size:9px;color:var(--green-dim);font-style:italic;margin-top:4px;}
+.status-txt{font-size:10px;color:var(--green-dim);margin-top:2px;min-height:13px;font-style:italic;}
+.card-foot{display:flex;justify-content:space-between;margin-top:5px;font-size:10px;color:var(--green-dim);}
+
+/* OB PANEL */
+.ob-panel{border:1px solid var(--border);background:var(--bg-card);display:flex;flex-direction:column;overflow:hidden;}
+.ob-panel-hdr{padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;min-height:38px;}
+.ob-title{font-size:10px;letter-spacing:4px;color:var(--green-dim);text-transform:uppercase;}
+.ob-src{font-size:9px;color:var(--green-dim);min-width:220px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ob-src span{color:var(--cyan);text-shadow:0 0 6px var(--cyan);}
+.ob-table-wrap{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border);}
+.ob-side{padding:6px 0;}
+.ob-side-hdr{display:flex;justify-content:space-between;padding:0 10px 4px;font-size:9px;color:var(--green-dim);border-bottom:1px solid var(--border);}
+.ob-side.asks .ob-side-hdr{flex-direction:row-reverse;}
+.ob-row{display:flex;justify-content:space-between;padding:1px 10px;font-size:11px;position:relative;white-space:nowrap;height:20px;align-items:center;}
+.ob-row .depth-bar{position:absolute;top:0;bottom:0;opacity:.12;}
+.ob-side.bids .depth-bar{right:0;background:var(--green);}
+.ob-side.asks .depth-bar{left:0;background:var(--red);}
+.ob-side.asks .ob-row{flex-direction:row-reverse;}
+.ob-row .px{font-family:'VT323',monospace;font-size:15px;}
+.ob-row .sz{color:var(--green-dim);font-size:10px;}
+.ob-side.bids .ob-row .px{color:#44ff88;}
+.ob-side.asks .ob-row .px{color:#ff6666;}
+.ob-mid{text-align:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:10px;color:var(--green-dim);}
+.ob-mid .spread-val{font-family:'VT323',monospace;font-size:18px;color:var(--yellow);text-shadow:0 0 8px rgba(255,204,0,.5);}
+
+/* PRESSURE */
+.pressure-section{padding:10px 14px;border-bottom:1px solid var(--border);}
+.pressure-title{font-size:9px;letter-spacing:3px;color:var(--green-dim);margin-bottom:6px;}
+.pressure-bar-wrap{height:22px;display:flex;border:1px solid var(--border);overflow:hidden;}
+.pressure-bid{background:linear-gradient(90deg,#004411,#00aa44);transition:width .5s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;min-width:0;}
+.pressure-ask{background:linear-gradient(90deg,#aa1111,#440000);transition:width .5s ease;display:flex;align-items:center;padding-left:6px;min-width:0;}
+.pressure-bid-lbl{font-family:'VT323',monospace;font-size:15px;color:#88ffaa;}
+.pressure-ask-lbl{font-family:'VT323',monospace;font-size:15px;color:#ff8888;}
+.pressure-stats{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;}
+.pressure-stats .bid-s{color:#44ff88;}
+.pressure-stats .ask-s{color:#ff5555;}
+.pressure-stats .imb-s{color:var(--yellow);}
+
+/* PER-EXCH IMB */
+.exch-imb-section{padding:10px 14px;overflow-y:auto;flex:1;}
+.exch-imb-title{font-size:9px;letter-spacing:3px;color:var(--green-dim);margin-bottom:8px;}
+.exch-imb-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:10px;}
+.exch-imb-name{width:76px;color:var(--green-dim);flex-shrink:0;font-size:9px;letter-spacing:1px;}
+.exch-imb-bar-wrap{flex:1;height:12px;background:rgba(255,51,51,.15);border:1px solid rgba(255,51,51,.1);overflow:hidden;}
+.exch-imb-bar-fill{height:100%;background:var(--green);transition:width .5s ease;}
+.exch-imb-pct{width:38px;text-align:right;font-size:10px;flex-shrink:0;}
+.exch-imb-pct.bull{color:#44ff88;}
+.exch-imb-pct.bear{color:#ff5555;}
+.exch-imb-ba{width:90px;text-align:right;font-size:9px;color:var(--green-dim);flex-shrink:0;}
+
+/* SPREAD */
+.spread-section{border:1px solid var(--border);background:var(--bg-card);padding:10px 14px;margin-bottom:14px;}
+.section-title{font-size:10px;letter-spacing:4px;color:var(--green-dim);margin-bottom:8px;text-transform:uppercase;}
+.spread-row{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;}
+.spread-chip{display:flex;gap:6px;align-items:center;padding:3px 8px;border:1px solid var(--border);background:rgba(0,255,65,.03);}
+.spread-chip .exch{color:var(--green-dim);font-size:10px;}
+.spread-chip .px{color:var(--green);font-family:'VT323',monospace;font-size:16px;}
+.spread-chip.best-buy{border-color:rgba(0,255,65,.5);background:rgba(0,255,65,.06);}
+.spread-chip.best-sell{border-color:rgba(255,51,51,.4);background:rgba(255,51,51,.04);}
+.spread-delta{font-family:'VT323',monospace;font-size:22px;color:var(--yellow);text-shadow:0 0 8px rgba(255,204,0,.5);}
+
+/* LOG */
+.log-section{border:1px solid var(--border);background:var(--bg-card);padding:12px 14px;}
+.log-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.prune-info{font-size:10px;color:var(--yellow);}
+#tick-log{height:200px;overflow-y:auto;font-size:11px;line-height:1.7;scrollbar-width:thin;scrollbar-color:var(--green-dim) transparent;}
+#tick-log::-webkit-scrollbar{width:3px;}
+#tick-log::-webkit-scrollbar-thumb{background:var(--green-dim);}
+.tick{display:flex;gap:10px;animation:tick-in .2s ease-out;}
+@keyframes tick-in{from{opacity:0;transform:translateX(-6px)}to{opacity:1}}
+.tick .t{color:#005511;min-width:82px;font-size:10px;}
+.tick .ex{color:var(--green-dim);min-width:88px;}
+.tick .px{color:var(--green);}
+.tick .ar.u{color:#44ff88;}
+.tick .ar.d{color:#ff5555;}
+.tick .ch{font-size:10px;}
+.tick .ch.u{color:rgba(68,255,136,.7);}
+.tick .ch.d{color:rgba(255,85,85,.7);}
+
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.blink{animation:blink 1s step-end infinite;}
+@media(max-width:700px){.ascii{font-size:6px;}.grid{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div class="wrap">
+
+<header class="hdr">
+  <div class="ascii" id="ascii-art">
+ ██████╗  ██████╗ ██╗         ██████╗ ██████╗ ██╗ ██████╗███████╗    ████████╗███████╗██████╗ ███╗   ███╗
+██╔════╝ ██╔═══██╗██║         ██╔══██╗██╔══██╗██║██╔════╝██╔════╝    ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║
+███████╗ ██║   ██║██║         ██████╔╝██████╔╝██║██║     █████╗         ██║   █████╗  ██████╔╝██╔████╔██║
+╚════██║ ██║   ██║██║         ██╔═══╝ ██╔══██╗██║██║     ██╔══╝         ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║
+ ██████╔╝╚██████╔╝███████╗    ██║     ██║  ██║██║╚██████╗███████╗       ██║   ███████╗██║  ██║██║ ╚═╝ ██║
+ ╚═════╝  ╚═════╝ ╚══════╝    ╚═╝     ╚═╝  ╚═╝╚═╝ ╚═════╝╚══════╝       ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝</div>
+  <div class="hdr-sub">[ <span>SOL / USDC</span> ] · PRICE + ORDERBOOK TERMINAL · <span class="blink">LIVE</span> ]</div>
+</header>
+
+<div class="sys-bar">
+  <div class="sys-item"><span class="sys-label">CONSENSUS</span><span class="sys-val big" id="consensus">——.——</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">AGG&nbsp;SPREAD</span><span class="sys-val" id="sys-spread">—</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">OB&nbsp;PRESSURE</span><span class="sys-val" id="sys-pressure" style="color:var(--yellow)">—</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">OB&nbsp;FEEDS</span><span class="sys-val" id="ob-feeds-live">0/6</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">PRICE&nbsp;FEEDS</span><span class="sys-val" id="feeds-live">0/10</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">TICKS/MIN</span><span class="sys-val" id="tpm">0</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">PRUNE&nbsp;IN</span><span class="sys-val" id="prune-cd" style="color:var(--yellow)">2:00</span></div>
+  <span class="sys-sep">|</span>
+  <div class="sys-item"><span class="sys-label">TIME</span><span class="sys-val" id="clock">—</span></div>
+</div>
+
+<div class="main-cols">
+  <div class="grid" id="grid"></div>
+
+  <div class="ob-panel">
+    <div class="ob-panel-hdr">
+      <div class="ob-title">── AGGREGATED ORDERBOOK ──</div>
+      <div class="ob-src">SRC: <span id="ob-src-list">connecting…</span></div>
+    </div>
+    <div class="ob-table-wrap">
+      <div class="ob-side bids">
+        <div class="ob-side-hdr"><span>PRICE</span><span>SIZE</span></div>
+        <div id="ob-bids"></div>
+      </div>
+      <div class="ob-side asks">
+        <div class="ob-side-hdr"><span>PRICE</span><span>SIZE</span></div>
+        <div id="ob-asks"></div>
+      </div>
+    </div>
+    <div class="ob-mid">SPREAD: <span class="spread-val" id="ob-spread">—</span></div>
+    <div class="pressure-section">
+      <div class="pressure-title">── BID / ASK PRESSURE (TOP 10 LEVELS) ──</div>
+      <div class="pressure-bar-wrap">
+        <div class="pressure-bid" id="pbid" style="width:50%"><span class="pressure-bid-lbl" id="pbid-lbl">50%</span></div>
+        <div class="pressure-ask" id="pask" style="width:50%"><span class="pressure-ask-lbl" id="pask-lbl">50%</span></div>
+      </div>
+      <div class="pressure-stats">
+        <span class="bid-s" id="ps-bid">BID —</span>
+        <span class="imb-s" id="ps-imb">IMB —</span>
+        <span class="ask-s" id="ps-ask">ASK —</span>
+      </div>
+    </div>
+    <div class="exch-imb-section">
+      <div class="exch-imb-title">── PER-EXCHANGE IMBALANCE (TOP 5 LEVELS) ──</div>
+      <div id="exch-imb-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="spread-section">
+  <div class="section-title">── LIVE PRICE SPREAD MATRIX ────────────────────────────────────────────</div>
+  <div class="spread-row" id="spread-row"><span style="color:var(--green-dim);font-size:11px">Awaiting data…</span></div>
+</div>
+
+<div class="log-section">
+  <div class="log-hdr">
+    <div class="section-title" style="margin:0">── TICK LOG (PRUNED EVERY 2 MIN) ───────────────────────────────────────</div>
+    <div class="prune-info" id="log-count">0 entries</div>
+  </div>
+  <div id="tick-log"></div>
+</div>
+
+</div><!-- /wrap -->
+<script>
+/* ── MATRIX RAIN ── */
+(()=>{
+  const c=document.getElementById('rain'),ctx=c.getContext('2d');
+  const CH='ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEF$#@%';
+  let cols,drops;
+  function resize(){c.width=innerWidth;c.height=innerHeight;cols=Math.floor(c.width/16);drops=Array(cols).fill(1);}
+  resize();window.addEventListener('resize',resize);
+  setInterval(()=>{
+    ctx.fillStyle='rgba(1,8,1,0.05)';ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle='#00ff41';ctx.font='14px Share Tech Mono';
+    drops.forEach((y,i)=>{ctx.fillText(CH[Math.floor(Math.random()*CH.length)],i*16,y*16);if(y*16>c.height&&Math.random()>.975)drops[i]=0;drops[i]++;});
+  },50);
+})();
+
+/* ── PRICE FEEDS ── */
+const PRICE_FEEDS=[
+  {id:'coinbase', name:'COINBASE',  kind:'ws',
+    url:'wss://ws-feed.exchange.coinbase.com',
+    sub:{type:'subscribe',product_ids:['SOL-USD'],channels:['ticker']},
+    parse:m=>m.type==='ticker'&&m.product_id==='SOL-USD'?+m.price:null},
+
+  // OKX drops after 30s silence — ping every 25s with plain string "ping"
+  {id:'okx',      name:'OKX',       kind:'ws',
+    url:'wss://ws.okx.com:8443/ws/v5/public',
+    sub:{op:'subscribe',args:[{channel:'tickers',instId:'SOL-USDT'}]},
+    pingMsg:'ping', pingInterval:25000, pongMsg:'pong',
+    parse:m=>m.data&&m.data[0]?+m.data[0].last:null},
+
+  // Bybit drops after 20s silence — ping every 18s with JSON op:ping
+  {id:'bybit',    name:'BYBIT',     kind:'ws',
+    url:'wss://stream.bybit.com/v5/public/spot',
+    sub:{op:'subscribe',args:['publicTrade.SOLUSDT']},
+    pingMsg:JSON.stringify({op:'ping'}), pingInterval:18000,
+    parse:m=>{
+      if(m.op==='pong'||m.ret_msg==='pong') return null; // pong — ignore
+      return m.topic&&m.topic.startsWith('publicTrade')&&m.data&&m.data[0]?+m.data[0].p:null;
+    }},
+
+  {id:'kraken',   name:'KRAKEN',    kind:'ws',
+    url:'wss://ws.kraken.com/v2',
+    sub:{method:'subscribe',params:{channel:'ticker',symbol:['SOL/USD']}},
+    parse:m=>{
+      if(m.method==='pong'||m.channel==='heartbeat') return null;
+      return m.channel==='ticker'&&m.data&&m.data[0]?+m.data[0].last:null;
+    }},
+
+  // Bitstamp sends bts:heartbeat — must respond or it closes the connection
+  {id:'bitstamp', name:'BITSTAMP',  kind:'ws_bitstamp',
+    url:'wss://ws.bitstamp.net',
+    sub:{event:'bts:subscribe',data:{channel:'live_trades_solusd'}}},
+
+  // Gate.io: time must be current on each connect, not stale from page load
+  {id:'gate',     name:'GATE.IO',   kind:'ws_gate',
+    url:'wss://api.gateio.ws/ws/v4/',
+    parse:m=>m.event==='update'&&m.result&&m.result.last?+m.result.last:null},
+
+  {id:'bitfinex', name:'BITFINEX',  kind:'bitfinex',
+    url:'wss://api-pub.bitfinex.com/ws/2',
+    sub:{event:'subscribe',channel:'ticker',symbol:'tSOLUSD'}},
+
+  {id:'gemini',   name:'GEMINI',    kind:'gemini',
+    url:'wss://api.gemini.com/v1/marketdata/SOLUSD'},
+
+  // Crypto.com sends heartbeat method — must respond with pong
+  {id:'cryptocom',name:'CRYPTO.COM',kind:'ws_cryptocom',
+    url:'wss://stream.crypto.com/exchange/v1/market',
+    sub:{id:1,method:'subscribe',nonce:0,params:{channels:['ticker.SOL_USD']}}},
+
+  {id:'pyth',     name:'PYTH',      kind:'poll',
+    url:'https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d',
+    interval:1000},
+];
+
+/* ── ORDERBOOK FEEDS ── */
+const OB_FEEDS=[
+  {id:'okx',         name:'OKX',      kind:'ob_okx',       url:'wss://ws.okx.com:8443/ws/v5/public',          sub:{op:'subscribe',args:[{channel:'books5',instId:'SOL-USDT'}]}},
+  {id:'bybit',       name:'BYBIT',    kind:'ob_bybit',     url:'wss://stream.bybit.com/v5/public/spot',        sub:{op:'subscribe',args:['orderbook.50.SOLUSDT']}},
+  {id:'kraken',      name:'KRAKEN',   kind:'ob_kraken',    url:'wss://ws.kraken.com/v2',                       sub:{method:'subscribe',params:{channel:'book',symbol:['SOL/USD'],depth:10}}},
+  {id:'coinbase_ob', name:'COINBASE', kind:'ob_coinbase',  url:'wss://advanced-trade-ws.coinbase.com',
+    // IMPORTANT: subscribe channel is "level2" — "l2_data" is only the *response* channel name
+    sub:{type:'subscribe',channel:'level2',product_ids:['SOL-USD']}},
+  // Bitstamp: live_order_book sends full top-100 snapshot on every book change — no seq tracking needed
+  {id:'bitstamp',    name:'BITSTAMP', kind:'ob_bitstamp',  url:'wss://ws.bitstamp.net'},
+  // Gate.io: spot.order_book pushes a full 20-level snapshot every 100ms — simple and clean
+  {id:'gate',        name:'GATE.IO',  kind:'ob_gate',      url:'wss://api.gateio.ws/ws/v4/'},
+];
+
+/* ── STATE ── */
+const pState={};
+PRICE_FEEDS.forEach(f=>{pState[f.id]={price:null,prev:null,status:'connecting',ticks:0};});
+const obState={};
+OB_FEEDS.forEach(f=>{obState[f.id]={bids:[],asks:[],status:'connecting'};});
+let tickLog=[],tickCount1Min=0,pruneCountdown=120;
+
+/* ── BUILD CARDS ── */
+const grid=document.getElementById('grid');
+const PX_TO_OB={coinbase:'coinbase_ob',okx:'okx',bybit:'bybit',kraken:'kraken',bitstamp:'bitstamp',gate:'gate'};
+
+PRICE_FEEDS.forEach(f=>{
+  const obId=PX_TO_OB[f.id];
+  const hasOb=!!obId;
+  const card=document.createElement('div');
+  card.className='card st-connecting';card.id='card-'+f.id;
+  card.innerHTML=`
+    <div class="card-top"><div class="exch-name">${f.name}</div><div class="dot st-connecting" id="dot-${f.id}"></div></div>
+    <div class="price-big" id="px-${f.id}">——.——</div>
+    ${hasOb?`
+    <div class="card-ba"><span class="lbl">B</span><span class="bid" id="bid-${obId}">—</span><span class="lbl">A</span><span class="ask" id="ask-${obId}">—</span><span class="spr" id="spr-${obId}">—</span></div>
+    <div class="imb-wrap"><div class="imb-fill" id="imb-fill-${obId}" style="width:50%"></div></div>
+    <div class="imb-label"><span style="color:#44ff88">BID</span><span class="imb-pct" id="imb-pct-${obId}">—</span><span style="color:#ff5555">ASK</span></div>`
+    :'<div class="no-ob">no ob feed</div>'}
+    <div class="status-txt" id="stxt-${f.id}">connecting…</div>
+    <div class="card-foot"><span id="ticks-${f.id}">ticks:0</span><span id="upd-${f.id}">—</span></div>`;
+  grid.appendChild(card);
+});
+
+/* per-exchange imbalance rows in OB panel */
+const eList=document.getElementById('exch-imb-list');
+OB_FEEDS.forEach(f=>{
+  const r=document.createElement('div');r.className='exch-imb-row';r.id='imb-row-'+f.id;
+  r.innerHTML=`<div class="exch-imb-name">${f.name}</div><div class="exch-imb-bar-wrap"><div class="exch-imb-bar-fill" id="eimb-fill-${f.id}" style="width:50%"></div></div><div class="exch-imb-pct" id="eimb-pct-${f.id}">—</div><div class="exch-imb-ba" id="eimb-ba-${f.id}">—</div>`;
+  eList.appendChild(r);
+});
+
+/* ── HELPERS ── */
+function setStatus(id,st,txt=''){
+  const card=document.getElementById('card-'+id),dot=document.getElementById('dot-'+id),stxt=document.getElementById('stxt-'+id);
+  if(card)card.className='card st-'+st;if(dot)dot.className='dot st-'+st;if(stxt)stxt.textContent=txt||st;
+  if(pState[id])pState[id].status=st;
+}
+
+function onPrice(id,price){
+  if(!price||isNaN(price)||price<=0)return;
+  const s=pState[id],prev=s.price;
+  s.prev=prev;s.price=price;s.ticks++;tickCount1Min++;
+  setStatus(id,'connected','live');
+  const dir=prev===null?'':price>prev?'up':price<prev?'down':'';
+  const el=document.getElementById('px-'+id);
+  if(el){el.className='price-big'+(dir?' flash-'+dir:'');el.innerHTML=price.toFixed(2)+(dir?`<span class="price-arrow ${dir}">${dir==='up'?'▲':'▼'}</span>`:'');setTimeout(()=>{el.className='price-big';},360);}
+  const te=document.getElementById('ticks-'+id);if(te)te.textContent='ticks:'+s.ticks;
+  const ue=document.getElementById('upd-'+id);if(ue)ue.textContent=new Date().toLocaleTimeString();
+  tickLog.push({ts:Date.now(),exch:id,price,dir,prev});
+  if(tickLog.length>500) tickLog.shift(); // cap — Bybit trades can be very high freq
+  appendTick(id,price,dir,prev);
+  updatePriceStats();
+}
+
+function appendTick(id,price,dir,prev){
+  const log=document.getElementById('tick-log');
+  const f=PRICE_FEEDS.find(x=>x.id===id);
+  const el=document.createElement('div');el.className='tick';
+  const chg=prev!==null?((price-prev)/prev*100).toFixed(4):'';
+  const chgTxt=chg?`<span class="ch ${dir}">${dir==='up'?'+':''}${chg}%</span>`:'';
+  el.innerHTML=`<span class="t">${new Date().toLocaleTimeString('en-US',{hour12:false})}</span><span class="ex">${f?f.name:id}</span><span class="px">$${price.toFixed(4)}</span><span class="ar ${dir}">${dir==='up'?'▲':dir==='down'?'▼':'·'}</span>${chgTxt}`;
+  log.appendChild(el);
+  // cap DOM rows to prevent unbounded growth
+  while(log.children.length>200) log.removeChild(log.firstChild);
+  log.scrollTop=log.scrollHeight;
+  document.getElementById('log-count').textContent=tickLog.length+' entries';
+}
+
+function updatePriceStats(){
+  const prices=PRICE_FEEDS.map(f=>pState[f.id]?.price).filter(p=>p!=null&&p>0);
+  if(!prices.length)return;
+  const s=prices.slice().sort((a,b)=>a-b);
+  document.getElementById('consensus').textContent=s[Math.floor(s.length/2)].toFixed(2);
+  document.getElementById('sys-spread').textContent=`$${(Math.max(...prices)-Math.min(...prices)).toFixed(4)}`;
+  document.getElementById('feeds-live').textContent=PRICE_FEEDS.filter(f=>pState[f.id]?.status==='connected').length+'/'+PRICE_FEEDS.length;
+  const pairs=PRICE_FEEDS.filter(f=>pState[f.id]?.price).map(f=>({id:f.id,name:f.name,px:pState[f.id].price})).sort((a,b)=>a.px-b.px);
+  if(pairs.length){
+    const row=document.getElementById('spread-row');
+    row.innerHTML=pairs.map((p,i)=>`<div class="spread-chip ${i===0?'best-buy':i===pairs.length-1?'best-sell':''}"><span class="exch">${p.name}</span><span class="px">$${p.px.toFixed(3)}</span></div>`).join('')
+      +(pairs.length>1?`<div class="spread-delta">Δ $${(pairs[pairs.length-1].px-pairs[0].px).toFixed(4)}</div>`:'');
+  }
+}
+
+/* ── ORDERBOOK LOGIC ── */
+function onOB(id,bids,asks){
+  const ob=obState[id];
+  ob.bids=bids.filter(r=>r[1]>0).sort((a,b)=>b[0]-a[0]).slice(0,25);
+  ob.asks=asks.filter(r=>r[1]>0).sort((a,b)=>a[0]-b[0]).slice(0,25);
+  ob.status='live';
+  updateCardOB(id);
+  updateAggOB();
+  updateOBCount();
+}
+
+function updateCardOB(id){
+  const ob=obState[id];
+  if(!ob.bids.length||!ob.asks.length)return;
+  const bestBid=ob.bids[0][0],bestAsk=ob.asks[0][0];
+  const spr=(bestAsk-bestBid).toFixed(4);
+  ['bid-'+id,'ask-'+id,'spr-'+id].forEach((eid,i)=>{const el=document.getElementById(eid);if(el)el.textContent=i===0?bestBid.toFixed(3):i===1?bestAsk.toFixed(3):'Δ'+spr;});
+  const N=5,bidVol=ob.bids.slice(0,N).reduce((s,r)=>s+r[1],0),askVol=ob.asks.slice(0,N).reduce((s,r)=>s+r[1],0),total=bidVol+askVol;
+  const pct=total>0?bidVol/total*100:50;
+  const fill=document.getElementById('imb-fill-'+id);if(fill)fill.style.width=pct.toFixed(1)+'%';
+  const pctEl=document.getElementById('imb-pct-'+id);
+  if(pctEl){pctEl.textContent=pct.toFixed(1)+'%';pctEl.className='imb-pct'+(pct>=55?' bull':pct<=45?' bear':'');}
+  const efill=document.getElementById('eimb-fill-'+id);if(efill)efill.style.width=pct.toFixed(1)+'%';
+  const epct=document.getElementById('eimb-pct-'+id);
+  if(epct){epct.textContent=pct.toFixed(1)+'%';epct.className='exch-imb-pct'+(pct>=55?' bull':pct<=45?' bear':'');}
+  const eba=document.getElementById('eimb-ba-'+id);if(eba)eba.textContent=`B${bidVol.toFixed(1)} A${askVol.toFixed(1)}`;
+}
+
+const OB_ROWS=8;
+function updateAggOB(){
+  const allBids={},allAsks={},srcs=[];
+  OB_FEEDS.forEach(f=>{
+    const ob=obState[f.id];if(!ob.bids.length)return;
+    srcs.push(f.name);
+    ob.bids.forEach(([px,sz])=>{const k=px.toFixed(3);allBids[k]=(allBids[k]||0)+sz;});
+    ob.asks.forEach(([px,sz])=>{const k=px.toFixed(3);allAsks[k]=(allAsks[k]||0)+sz;});
+  });
+  document.getElementById('ob-src-list').textContent=srcs.join(' · ')||'—';
+  const bids=Object.entries(allBids).map(([k,v])=>[+k,v]).sort((a,b)=>b[0]-a[0]).slice(0,OB_ROWS);
+  const asks=Object.entries(allAsks).map(([k,v])=>[+k,v]).sort((a,b)=>a[0]-b[0]).slice(0,OB_ROWS);
+  const maxSz=Math.max(...bids.map(r=>r[1]),...asks.map(r=>r[1]),1);
+
+  const bidsEl=document.getElementById('ob-bids');bidsEl.innerHTML='';
+  bids.forEach(([px,sz])=>{
+    const pct=(sz/maxSz*100).toFixed(1);
+    const r=document.createElement('div');r.className='ob-row';
+    r.innerHTML=`<div class="depth-bar" style="width:${pct}%"></div><span class="px">${px.toFixed(3)}</span><span class="sz">${sz.toFixed(2)}</span>`;
+    bidsEl.appendChild(r);
+  });
+  const asksEl=document.getElementById('ob-asks');asksEl.innerHTML='';
+  asks.forEach(([px,sz])=>{
+    const pct=(sz/maxSz*100).toFixed(1);
+    const r=document.createElement('div');r.className='ob-row';
+    r.innerHTML=`<div class="depth-bar" style="width:${pct}%"></div><span class="px">${px.toFixed(3)}</span><span class="sz">${sz.toFixed(2)}</span>`;
+    asksEl.appendChild(r);
+  });
+  if(bids.length&&asks.length)document.getElementById('ob-spread').textContent='$'+(asks[0][0]-bids[0][0]).toFixed(4);
+
+  // pressure
+  const N=10,bidVol=bids.slice(0,N).reduce((s,r)=>s+r[1],0),askVol=asks.slice(0,N).reduce((s,r)=>s+r[1],0),total=bidVol+askVol;
+  if(total>0){
+    const bp=bidVol/total*100,ap=100-bp;
+    document.getElementById('pbid').style.width=bp.toFixed(1)+'%';
+    document.getElementById('pask').style.width=ap.toFixed(1)+'%';
+    document.getElementById('pbid-lbl').textContent=bp.toFixed(0)+'%';
+    document.getElementById('pask-lbl').textContent=ap.toFixed(0)+'%';
+    document.getElementById('ps-bid').textContent='BID '+bidVol.toFixed(1);
+    document.getElementById('ps-ask').textContent='ASK '+askVol.toFixed(1);
+    const imbEl=document.getElementById('ps-imb');imbEl.textContent='IMB '+bp.toFixed(1)+'%';imbEl.style.color=bp>=55?'#44ff88':bp<=45?'#ff5555':'var(--yellow)';
+    const sp=document.getElementById('sys-pressure');sp.textContent=bp.toFixed(1)+'% BID';sp.style.color=bp>=55?'#44ff88':bp<=45?'#ff5555':'var(--yellow)';
+  }
+}
+
+function updateOBCount(){
+  document.getElementById('ob-feeds-live').textContent=OB_FEEDS.filter(f=>obState[f.id]?.bids?.length>0).length+'/'+OB_FEEDS.length;
+}
+
+/* ── OB PARSERS ── */
+function connectOB_OKX(f,rd=3000){
+  let ws,ping;
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    ws.send(JSON.stringify(f.sub));
+    // OKX disconnects after 30s with no traffic — send plain "ping" string every 25s
+    ping=setInterval(()=>{ if(ws&&ws.readyState===WebSocket.OPEN) ws.send('ping'); },25000);
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      // OKX responds to ping with plain "pong" string
+      if(ev.data==='pong') return;
+      const d=JSON.parse(ev.data);
+      if(d.arg?.channel==='books5'&&d.data?.[0]){
+        const b=d.data[0];
+        onOB('okx',(b.bids||[]).map(r=>[+r[0],+r[1]]),(b.asks||[]).map(r=>[+r[0],+r[1]]));
+      }
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{};
+  ws.onclose=()=>{
+    clearInterval(ping);
+    setTimeout(()=>connectOB_OKX(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+function connectOB_Bybit(f,rd=3000){
+  let ws,ping,pongTimeout;
+  const book={bids:{},asks:{}};
+
+  function startPing(){
+    clearInterval(ping);
+    ping=setInterval(()=>{
+      if(ws&&ws.readyState===WebSocket.OPEN){
+        ws.send(JSON.stringify({op:'ping'}));
+        // if pong not received within 5s, consider dead
+        pongTimeout=setTimeout(()=>{ try{ws.close();}catch(_){} },5000);
+      }
+    },20000);
+  }
+
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    book.bids={};book.asks={};
+    ws.send(JSON.stringify(f.sub));
+    startPing();
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      // pong — connection is healthy
+      if(d.op==='pong'||d.ret_msg==='pong'){ clearTimeout(pongTimeout); return; }
+      if(!d.topic?.startsWith('orderbook')||!d.data) return;
+
+      if(d.type==='snapshot'){
+        // full snapshot — reset book
+        book.bids={};book.asks={};
+        (d.data.b||[]).forEach(([px,sz])=>{ book.bids[(+px).toFixed(8)]=+sz; });
+        (d.data.a||[]).forEach(([px,sz])=>{ book.asks[(+px).toFixed(8)]=+sz; });
+      } else {
+        // delta — apply incremental changes (size=0 means remove level)
+        (d.data.b||[]).forEach(([px,sz])=>{ const k=(+px).toFixed(8); if(+sz===0)delete book.bids[k]; else book.bids[k]=+sz; });
+        (d.data.a||[]).forEach(([px,sz])=>{ const k=(+px).toFixed(8); if(+sz===0)delete book.asks[k]; else book.asks[k]=+sz; });
+      }
+
+      onOB('bybit',
+        Object.entries(book.bids).map(([k,v])=>[+k,v]),
+        Object.entries(book.asks).map(([k,v])=>[+k,v])
+      );
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{};
+  ws.onclose=()=>{
+    clearInterval(ping);clearTimeout(pongTimeout);
+    setTimeout(()=>connectOB_Bybit(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+function connectOB_Kraken(f,rd=3000){
+  let ws,ping,pongTimeout;
+  const book={bids:{},asks:{}};
+
+  function startPing(){
+    clearInterval(ping);
+    ping=setInterval(()=>{
+      if(ws&&ws.readyState===WebSocket.OPEN){
+        ws.send(JSON.stringify({method:'ping'}));
+        pongTimeout=setTimeout(()=>{ try{ws.close();}catch(_){} },5000);
+      }
+    },45000);
+  }
+
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    book.bids={};book.asks={};
+    ws.send(JSON.stringify(f.sub));
+    startPing();
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      // pong response
+      if(d.method==='pong'){ clearTimeout(pongTimeout); return; }
+      // heartbeat — ignore, just confirms connection alive
+      if(d.channel==='heartbeat') return;
+      if(d.channel==='book'){
+        const data=Array.isArray(d.data)?d.data[0]:d.data;if(!data)return;
+        if(d.type==='snapshot'){
+          book.bids={};book.asks={};
+          (data.bids||[]).forEach(r=>{book.bids[(+r.price).toFixed(8)]=+r.qty;});
+          (data.asks||[]).forEach(r=>{book.asks[(+r.price).toFixed(8)]=+r.qty;});
+        } else {
+          (data.bids||[]).forEach(r=>{const k=(+r.price).toFixed(8);if(+r.qty===0)delete book.bids[k];else book.bids[k]=+r.qty;});
+          (data.asks||[]).forEach(r=>{const k=(+r.price).toFixed(8);if(+r.qty===0)delete book.asks[k];else book.asks[k]=+r.qty;});
+        }
+        onOB('kraken',Object.entries(book.bids).map(([k,v])=>[+k,v]),Object.entries(book.asks).map(([k,v])=>[+k,v]));
+      }
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{};
+  ws.onclose=()=>{
+    clearInterval(ping);clearTimeout(pongTimeout);
+    setTimeout(()=>connectOB_Kraken(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+function connectOB_Coinbase(f,rd=3000){
+  let ws, stalenessTimer;
+  const book={bids:{},asks:{}};
+
+  function resetStaleness(){
+    clearTimeout(stalenessTimer);
+    // Coinbase silent-fails if snapshot is too large, then stops sending after ~90s
+    // If we get nothing for 95s, assume dead and force reconnect
+    stalenessTimer=setTimeout(()=>{
+      console.warn('Coinbase OB: 95s stale — forcing reconnect');
+      try{ws.close();}catch(_){}
+    },95000);
+  }
+
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    book.bids={};book.asks={};
+    // subscribe channel is "level2" (not "l2_data" which is only the response channel name)
+    ws.send(JSON.stringify(f.sub));
+    // heartbeats keep connection alive — Coinbase closes after 60-90s of no data
+    ws.send(JSON.stringify({type:'subscribe',channel:'heartbeats',product_ids:['SOL-USD']}));
+    resetStaleness();
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      resetStaleness(); // any message resets the stale timer
+      const d=JSON.parse(ev.data);
+      if(d.channel==='heartbeats') return;
+      // subscriptions ack — ignore
+      if(d.channel==='subscriptions') return;
+      if(d.channel==='l2_data'&&d.events){
+        d.events.forEach(evt=>{
+          if(evt.type==='snapshot'){
+            book.bids={};book.asks={};
+            (evt.updates||[]).forEach(u=>{
+              const k=(+u.price_level).toFixed(8);
+              if(u.side==='bid') book.bids[k]=+u.new_quantity;
+              else               book.asks[k]=+u.new_quantity;
+            });
+          } else if(evt.type==='update'){
+            (evt.updates||[]).forEach(u=>{
+              const k=(+u.price_level).toFixed(8);
+              if(u.side==='bid'){ if(+u.new_quantity===0)delete book.bids[k]; else book.bids[k]=+u.new_quantity; }
+              else               { if(+u.new_quantity===0)delete book.asks[k]; else book.asks[k]=+u.new_quantity; }
+            });
+          }
+        });
+        onOB('coinbase_ob',
+          Object.entries(book.bids).map(([k,v])=>[+k,v]),
+          Object.entries(book.asks).map(([k,v])=>[+k,v])
+        );
+      }
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{ clearTimeout(stalenessTimer); };
+  ws.onclose=()=>{
+    clearTimeout(stalenessTimer);
+    setTimeout(()=>connectOB_Coinbase(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+/* ── PRICE CONNECTORS ── */
+function connectWS(f,rd=3000){
+  let ws,ping;
+  try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+
+  ws.onopen=()=>{
+    if(f.sub) ws.send(JSON.stringify(f.sub));
+    // optional keepalive ping (some exchanges drop silent connections)
+    if(f.pingMsg && f.pingInterval){
+      ping=setInterval(()=>{ if(ws.readyState===WebSocket.OPEN) ws.send(f.pingMsg); },f.pingInterval);
+    }
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      // handle plain-string pong (e.g. OKX responds "pong" not JSON)
+      if(f.pongMsg && ev.data===f.pongMsg) return;
+      const m=JSON.parse(ev.data);
+      const px=f.parse(m);
+      if(px!=null && px>0) onPrice(f.id,px);
+    }catch(_){}
+  };
+
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{
+    clearInterval(ping);
+    setStatus(f.id,'disconnected','reconnecting…');
+    setTimeout(()=>connectWS(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+// Bitstamp: must respond to bts:heartbeat with bts:heartbeat or server will close
+function connectWS_Bitstamp(f,rd=3000){
+  let ws;
+  try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+
+  ws.onopen=()=> ws.send(JSON.stringify(f.sub));
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      if(d.event==='bts:heartbeat'){
+        // must respond or Bitstamp closes after 10s
+        ws.send(JSON.stringify({event:'bts:heartbeat'}));
+        return;
+      }
+      if(d.event==='bts:subscription_succeeded') return;
+      if(d.event==='trade'&&d.data&&d.data.price) onPrice(f.id,+d.data.price);
+    }catch(_){}
+  };
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{setStatus(f.id,'disconnected','reconnecting…');setTimeout(()=>connectWS_Bitstamp(f,Math.min(rd*1.5,30000)),rd);};
+}
+
+// Gate.io: time field in sub must be current timestamp, refresh on each connect
+function connectWS_Gate(f,rd=3000){
+  let ws,ping;
+  try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+
+  ws.onopen=()=>{
+    // fresh timestamp on every connect/reconnect
+    ws.send(JSON.stringify({channel:'spot.tickers',event:'subscribe',payload:['SOL_USDT'],time:Math.floor(Date.now()/1000)}));
+    // Gate.io needs periodic ping or it closes
+    ping=setInterval(()=>{ if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({channel:'spot.ping',event:'',time:Math.floor(Date.now()/1000)})); },25000);
+  };
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      if(d.event==='pong'||d.channel==='spot.pong') return;
+      const px=f.parse(d);
+      if(px!=null && px>0) onPrice(f.id,px);
+    }catch(_){}
+  };
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{clearInterval(ping);setStatus(f.id,'disconnected','reconnecting…');setTimeout(()=>connectWS_Gate(f,Math.min(rd*1.5,30000)),rd);};
+}
+
+// Crypto.com: server sends heartbeat every 30s, must respond with pong or it closes
+function connectWS_CryptoCom(f,rd=3000){
+  let ws;
+  try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+
+  ws.onopen=()=> ws.send(JSON.stringify(f.sub));
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      // respond to heartbeat challenge immediately
+      if(d.method==='public/heartbeat'){
+        ws.send(JSON.stringify({id:d.id,method:'public/respond-heartbeat'}));
+        return;
+      }
+      if(d.result&&d.result.data&&d.result.data[0]){
+        const px=+d.result.data[0].a;
+        if(px>0) onPrice(f.id,px);
+      }
+    }catch(_){}
+  };
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{setStatus(f.id,'disconnected','reconnecting…');setTimeout(()=>connectWS_CryptoCom(f,Math.min(rd*1.5,30000)),rd);};
+}
+
+function connectBitfinex(f,rd=3000){
+  let ws,chanId=null;try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+  ws.onopen=()=>ws.send(JSON.stringify(f.sub));
+  ws.onmessage=ev=>{try{const d=JSON.parse(ev.data);if(d.event==='subscribed'){chanId=d.chanId;return;}if(Array.isArray(d)&&d[0]===chanId&&d[1]!=='hb'&&Array.isArray(d[1])&&d[1].length>=7)onPrice(f.id,Math.abs(d[1][6]));}catch(_){}};
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{setStatus(f.id,'disconnected','reconnecting…');setTimeout(()=>connectBitfinex(f,Math.min(rd*1.5,30000)),rd);};
+}
+
+function connectGemini(f,rd=4000){
+  let ws;try{ws=new WebSocket(f.url);}catch(e){setStatus(f.id,'error','failed');return;}
+  setStatus(f.id,'connecting','handshake…');
+  ws.onopen=()=>setStatus(f.id,'connecting','stream open…');
+  ws.onmessage=ev=>{try{const d=JSON.parse(ev.data);if(d.events){const t=d.events.filter(e=>e.type==='trade');if(t.length)onPrice(f.id,+t[t.length-1].price);}}catch(_){}};
+  ws.onerror=()=>setStatus(f.id,'error','ws error');
+  ws.onclose=()=>{setStatus(f.id,'disconnected','reconnecting…');setTimeout(()=>connectGemini(f,Math.min(rd*1.5,30000)),rd);};
+}
+
+
+async function pollPyth(f){
+  setStatus(f.id,'connecting','polling…');
+  const poll=async()=>{try{const r=await fetch(f.url),j=await r.json();const i=j.parsed?.[0];if(i?.price)onPrice(f.id,i.price.price*Math.pow(10,i.price.expo));}catch(e){setStatus(f.id,'error','poll failed');}};
+  poll();setInterval(poll,f.interval||1000);
+}
+
+// Bitstamp OB: live_order_book sends full top-100 snapshot on every book change
+// Much simpler than diff_order_book — no delta tracking, no seq numbers needed
+// Must also respond to bts:heartbeat or server closes connection
+function connectOB_Bitstamp(f,rd=3000){
+  let ws;
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    ws.send(JSON.stringify({event:'bts:subscribe',data:{channel:'live_order_book_solusd'}}));
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      const d=JSON.parse(ev.data);
+      // must echo heartbeat or server closes after 10s
+      if(d.event==='bts:heartbeat'){ ws.send(JSON.stringify({event:'bts:heartbeat'})); return; }
+      if(d.event==='bts:subscription_succeeded') return;
+      if(d.event==='data'&&d.data&&d.data.bids&&d.data.asks){
+        onOB('bitstamp',
+          d.data.bids.map(r=>[+r[0],+r[1]]),
+          d.data.asks.map(r=>[+r[0],+r[1]])
+        );
+      }
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{};
+  ws.onclose=()=>{ setTimeout(()=>connectOB_Bitstamp(f,Math.min(rd*1.5,30000)),rd); };
+}
+
+// Gate.io OB: spot.order_book pushes full N-level snapshot every 100ms
+// first=true means it's a full snapshot; false means it's an incremental update
+// We maintain state for updates, reset on full snapshots
+function connectOB_Gate(f,rd=3000){
+  let ws,ping;
+  const book={bids:{},asks:{}};
+
+  try{ws=new WebSocket(f.url);}catch(e){return;}
+
+  ws.onopen=()=>{
+    book.bids={};book.asks={};
+    ws.send(JSON.stringify({
+      channel:'spot.order_book_update',
+      event:'subscribe',
+      payload:['SOL_USDT','100ms'],
+      time:Math.floor(Date.now()/1000)
+    }));
+    ping=setInterval(()=>{
+      if(ws.readyState===WebSocket.OPEN)
+        ws.send(JSON.stringify({channel:'spot.ping',event:'',time:Math.floor(Date.now()/1000)}));
+    },25000);
+  };
+
+  ws.onmessage=ev=>{
+    try{
+      if(ev.data==='pong') return;
+      const d=JSON.parse(ev.data);
+      if(d.event==='pong'||d.channel==='spot.pong') return;
+      if(d.channel==='spot.order_book_update'&&d.event==='update'&&d.result){
+        const r=d.result;
+        if(r.full){
+          // full snapshot — reset
+          book.bids={};book.asks={};
+        }
+        // apply updates (size=0 means remove)
+        (r.b||[]).forEach(([px,sz])=>{ const k=(+px).toFixed(8); if(+sz===0)delete book.bids[k]; else book.bids[k]=+sz; });
+        (r.a||[]).forEach(([px,sz])=>{ const k=(+px).toFixed(8); if(+sz===0)delete book.asks[k]; else book.asks[k]=+sz; });
+        onOB('gate',
+          Object.entries(book.bids).map(([k,v])=>[+k,v]),
+          Object.entries(book.asks).map(([k,v])=>[+k,v])
+        );
+      }
+    }catch(_){}
+  };
+
+  ws.onerror=()=>{};
+  ws.onclose=()=>{
+    clearInterval(ping);
+    setTimeout(()=>connectOB_Gate(f,Math.min(rd*1.5,30000)),rd);
+  };
+}
+
+/* ── START ── */
+PRICE_FEEDS.forEach(f=>{
+  switch(f.kind){
+    case 'ws':          connectWS(f);             break;
+    case 'ws_bitstamp': connectWS_Bitstamp(f);    break;
+    case 'ws_gate':     connectWS_Gate(f);         break;
+    case 'ws_cryptocom':connectWS_CryptoCom(f);   break;
+    case 'bitfinex':    connectBitfinex(f);        break;
+    case 'gemini':      connectGemini(f);          break;
+    case 'poll':        pollPyth(f);               break;
+  }
+});
+OB_FEEDS.forEach(f=>{
+  switch(f.kind){
+    case 'ob_okx':      connectOB_OKX(f);      break;
+    case 'ob_bybit':    connectOB_Bybit(f);     break;
+    case 'ob_kraken':   connectOB_Kraken(f);    break;
+    case 'ob_coinbase':  connectOB_Coinbase(f);  break;
+    case 'ob_bitstamp':  connectOB_Bitstamp(f);  break;
+    case 'ob_gate':      connectOB_Gate(f);       break;
+  }
+});
+
+/* ── TIMERS ── */
+setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-US',{hour12:false}),1000);
+setInterval(()=>{document.getElementById('tpm').textContent=tickCount1Min;tickCount1Min=0;},60000);
+setInterval(()=>{
+  pruneCountdown--;
+  const m=Math.floor(pruneCountdown/60),s=pruneCountdown%60;
+  document.getElementById('prune-cd').textContent=`${m}:${s.toString().padStart(2,'0')}`;
+  if(pruneCountdown<=0){
+    pruneCountdown=120;
+    const cut=Date.now()-120000;tickLog=tickLog.filter(t=>t.ts>=cut);
+    const log=document.getElementById('tick-log');log.innerHTML='';
+    tickLog.forEach(t=>{const f=PRICE_FEEDS.find(x=>x.id===t.exch);const el=document.createElement('div');el.className='tick';el.innerHTML=`<span class="t">${new Date(t.ts).toLocaleTimeString('en-US',{hour12:false})}</span><span class="ex">${f?f.name:t.exch}</span><span class="px">$${t.price.toFixed(4)}</span><span class="ar ${t.dir}">${t.dir==='up'?'▲':t.dir==='down'?'▼':'·'}</span>`;log.appendChild(el);});
+    document.getElementById('log-count').textContent=tickLog.length+' entries (pruned)';
+  }
+},1000);
+
+// Pause matrix rain when tab is hidden to save resources
+document.addEventListener('visibilitychange',()=>{
+  const rain=document.getElementById('rain');
+  if(rain) rain.style.opacity=document.hidden?'0':'.04';
+});
+
+// ASCII glitch
+setInterval(()=>{const el=document.getElementById('ascii-art');el.style.transform=`skewX(${(Math.random()-.5)*1.5}deg)`;el.style.opacity=(0.85+Math.random()*0.15)+'';setTimeout(()=>{el.style.transform='';el.style.opacity='1';},80);},(6+Math.random()*4)*1000);
+</script>
+</body>
+</html>
