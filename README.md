@@ -37,7 +37,7 @@ No server. No backend. No npm install. Open the file. Vibe.
 
 ```bash
 # Option 1: just open it
-open solhack.html
+open index.html
 
 # Option 2: serve locally if your browser blocks local WS
 npx serve .
