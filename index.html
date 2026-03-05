@@ -26,7 +26,7 @@ html{height:100%;}
 body{background:var(--bg);color:var(--green);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden;position:relative;}
 body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);pointer-events:none;z-index:9999;}
 body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.75) 100%);pointer-events:none;z-index:9998;}
-canvas#rain{position:fixed;top:0;left:0;opacity:.04;pointer-events:none;z-index:0;}
+canvas#rain{position:fixed;top:0;left:0;opacity:.14;pointer-events:none;z-index:0;}
 
 .wrap{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:16px 20px 40px;}
 
@@ -263,7 +263,7 @@ canvas#rain{position:fixed;top:0;left:0;opacity:.04;pointer-events:none;z-index:
   function resize(){c.width=innerWidth;c.height=innerHeight;cols=Math.floor(c.width/16);drops=Array(cols).fill(1);}
   resize();window.addEventListener('resize',resize);
   setInterval(()=>{
-    ctx.fillStyle='rgba(1,8,1,0.05)';ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle='rgba(1,8,1,0.03)';ctx.fillRect(0,0,c.width,c.height);
     ctx.fillStyle='#00ff41';ctx.font='14px Share Tech Mono';
     drops.forEach((y,i)=>{ctx.fillText(CH[Math.floor(Math.random()*CH.length)],i*16,y*16);if(y*16>c.height&&Math.random()>.975)drops[i]=0;drops[i]++;});
   },50);
